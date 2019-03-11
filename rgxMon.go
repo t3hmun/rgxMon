@@ -3,17 +3,19 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/fsnotify/fsnotify"
 )
 
 var op = make(chan fsnotify.Event)
-var watcher Watcher
+var watcher *fsnotify.Watcher
 
 func main() {
 
-	var err Error
-	watcher, err = wathcher.NewWatcher
+	fmt.Printf("RgxMon %s\n", os.Args[1])
+	var err error
+	watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -28,16 +30,15 @@ func watch() {
 			if !ok {
 				return
 			}
-			fmt.Printf(event)
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				fmt.Printf(event)
+				fmt.Printf(event.Name)
 				op <- event
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
 				return
 			}
-			fmt.PrintF(err)
+			fmt.Println(err)
 		}
 	}
 }
