@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
 
 var change = make(chan string)
-var done = make(chan bool)
+var done = make(chan string)
 var watcher *fsnotify.Watcher
 
 func main() {
@@ -23,15 +24,13 @@ func main() {
 	}
 	defer watcher.Close()
 
-	err = watcher.Add(os.Args[1])
-	if err != nil {
-		log.Fatal(err)
-	}
+	subscribe(os.Args[1])
 
 	go watch()
 	go act()
 
-	<-done
+	exitReason := <-done
+	fmt.Printf("rsgMon quit because %s", exitReason)
 }
 
 func act() {
@@ -46,24 +45,49 @@ func act() {
 	}
 }
 
+func subscribe(filename string) {
+	err := watcher.Add(filename)
+	if err != nil {
+		fmt.Printf("Failed to sub: %s", err)
+		log.Fatal(err)
+	}
+}
+
+func pauseTryResubscribe(filename string) bool {
+
+	var err error
+	for i := 0; i < 5; i++ {
+
+		time.Sleep(50 * time.Millisecond)
+
+		err = watcher.Add(filename)
+		if err != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func watch() {
 	for {
 		select {
-		case event, ok := <-watcher.Events:
+		case event := <-watcher.Events:
 			fmt.Println(event.Name)
 			fmt.Println(event.Op)
-			if !ok {
-				done <- true
-				return
-			}
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				fmt.Printf(event.Name)
 				change <- event.Name
 			}
+			if event.Op&fsnotify.Remove == fsnotify.Remove {
+				success := pauseTryResubscribe(event.Name)
+				if !success {
+					done <- "File deleted."
+				}
+			}
 		case err, ok := <-watcher.Errors:
 			fmt.Println(err)
 			if !ok {
-				done <- true
+				done <- "Errored."
 				return
 			}
 		}
