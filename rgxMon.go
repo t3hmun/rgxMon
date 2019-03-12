@@ -12,6 +12,7 @@ import (
 var change = make(chan string)
 var done = make(chan string)
 var watcher *fsnotify.Watcher
+var target string
 
 func main() {
 
@@ -30,14 +31,13 @@ func main() {
 	go act()
 
 	exitReason := <-done
-	fmt.Printf("rsgMon quit because %s", exitReason)
+	fmt.Printf("rgxMon quit because %s\n", exitReason)
 }
 
 func act() {
 	for {
 		select {
 		case c := <-change:
-			fmt.Println("Reacting to %s", c)
 			//TODO: regex the file.
 		case <-done:
 			return
@@ -45,10 +45,16 @@ func act() {
 	}
 }
 
+func readFile(filename string) string {
+
+}
+
+func runRegex(regex string) {}
+
 func subscribe(filename string) {
 	err := watcher.Add(filename)
 	if err != nil {
-		fmt.Printf("Failed to sub: %s", err)
+		fmt.Printf("Failed to sub: %s\n", err)
 		log.Fatal(err)
 	}
 }
@@ -61,7 +67,7 @@ func pauseTryResubscribe(filename string) bool {
 		time.Sleep(50 * time.Millisecond)
 
 		err = watcher.Add(filename)
-		if err != nil {
+		if err == nil {
 			return true
 		}
 	}
@@ -72,8 +78,6 @@ func watch() {
 	for {
 		select {
 		case event := <-watcher.Events:
-			fmt.Println(event.Name)
-			fmt.Println(event.Op)
 			if event.Op&fsnotify.Write == fsnotify.Write {
 				fmt.Printf(event.Name)
 				change <- event.Name
@@ -83,6 +87,7 @@ func watch() {
 				if !success {
 					done <- "File deleted."
 				}
+				change <- event.Name
 			}
 		case err, ok := <-watcher.Errors:
 			fmt.Println(err)
