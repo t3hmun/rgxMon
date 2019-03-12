@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -12,11 +13,11 @@ import (
 var change = make(chan string)
 var done = make(chan string)
 var watcher *fsnotify.Watcher
-var target string
+var target []byte
 
 func main() {
 
-	fmt.Printf("RgxMon %s\n", os.Args[1])
+	fmt.Printf("RgxMon %s %s\n", os.Args[1], os.Args[2])
 	//TODO: take regex arg
 	var err error
 	watcher, err = fsnotify.NewWatcher()
@@ -25,10 +26,12 @@ func main() {
 	}
 	defer watcher.Close()
 
+	target = ReadFile(as.Args[2])
 	subscribe(os.Args[1])
 
 	go watch()
 	go act()
+	change <- os.Args[1]
 
 	exitReason := <-done
 	fmt.Printf("rgxMon quit because %s\n", exitReason)
@@ -38,6 +41,8 @@ func act() {
 	for {
 		select {
 		case c := <-change:
+			rgxText := string(readFile(c))
+			runRegex(rgxText)
 			//TODO: regex the file.
 		case <-done:
 			return
@@ -45,11 +50,29 @@ func act() {
 	}
 }
 
-func readFile(filename string) string {
-
+func readFile(filename string) []byte {
+	result, err := ioutil.ReadFile(filename)
+	if err != nil {
+		fmt.Printf("Failed to read %s", filename)
+		log.Fatal(err)
+	}
+	return result
 }
 
-func runRegex(regex string) {}
+func runRegex(regex string) {
+	rgx, err := regex.Compile(string)
+	if err == nil {
+		matches = rgx.FindAllSubmatch(target)
+		for i, match := range matches {
+			for j, group := range match {
+				g = gestalt(group)
+				fmt.Printf("%d: %s\n", j, g)
+			}
+		}
+	} else {
+		fmt.Printf("Err: %s\n", err)
+	}
+}
 
 func subscribe(filename string) {
 	err := watcher.Add(filename)
