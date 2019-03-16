@@ -5,9 +5,13 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"regexp"
 	"time"
 
+	"github.com/t3hmun/t3hterm"
+
 	"github.com/fsnotify/fsnotify"
+	"github.com/t3hmun/t3hstr"
 )
 
 var change = make(chan string)
@@ -59,13 +63,17 @@ func readFile(filename string) []byte {
 	return result
 }
 
-func runRegex(regex string) {
-	rgx, err := regex.Compile(string)
+func runRegex(regexText string) {
+	rgx, err := regexp.Compile(regexText)
 	if err == nil {
-		matches = rgx.FindAllSubmatch(target)
+		matches := rgx.FindAllSubmatch(target, -1)
+		termSize, err := t3hterm.GetSizeAndPosition()
+		if err != nil {
+			panic(err)
+		}
 		for i, match := range matches {
 			for j, group := range match {
-				g = gestalt(group)
+				g := t3hstr.Gestalt([]rune(string(group)), termSize.Width, []rune("..."))
 				fmt.Printf("%d: %s\n", j, g)
 			}
 		}
