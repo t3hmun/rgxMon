@@ -8,16 +8,16 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/t3hmun/t3hterm"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/t3hmun/t3hstr"
+	"github.com/t3hmun/t3hterm"
 )
 
 var change = make(chan string)
 var done = make(chan string)
 var watcher *fsnotify.Watcher
 var target []byte
+var targetFilename string
 
 func main() {
 
@@ -30,7 +30,8 @@ func main() {
 	}
 	defer watcher.Close()
 
-	target = ReadFile(as.Args[2])
+	targetFilename = os.Args[2]
+	target = readFile(targetFilename)
 	subscribe(os.Args[1])
 
 	go watch()
@@ -46,8 +47,14 @@ func act() {
 		select {
 		case c := <-change:
 			rgxText := string(readFile(c))
-			runRegex(rgxText)
-			//TODO: regex the file.
+			if rgxText == "" {
+				// Some editor behaviour causes the file to be read blank before being poperly read.
+				// Also actual blank reges are pointless.
+				fmt.Printf("Blank regex, skipped.\n")
+			} else {
+				// passing the target because i want to extend this to multiple files later.
+				runRegex(rgxText, targetFilename, target)
+			}
 		case <-done:
 			return
 		}
@@ -63,22 +70,31 @@ func readFile(filename string) []byte {
 	return result
 }
 
-func runRegex(regexText string) {
+func runRegex(regexText string, filename string, fileText []byte) {
 	rgx, err := regexp.Compile(regexText)
 	if err == nil {
-		matches := rgx.FindAllSubmatch(target, -1)
-		termSize, err := t3hterm.GetSizeAndPosition()
-		if err != nil {
-			panic(err)
-		}
+		matches := rgx.FindAllSubmatch(fileText, -1)
+		width := getTerminalWidth()
+		fmt.Printf("\nFile=%s, Regex=%s\n", filename, regexText)
 		for i, match := range matches {
+			fmt.Printf("Match %d\n", i)
 			for j, group := range match {
-				g := t3hstr.Gestalt([]rune(string(group)), termSize.Width, []rune("..."))
-				fmt.Printf("%d: %s\n", j, g)
+				line := fmt.Sprintf("(%d) %s", j, group)
+				g := t3hstr.Gestalt([]rune(line), width, []rune("..."))
+				fmt.Printf("%s\n", g)
 			}
 		}
 	} else {
 		fmt.Printf("Err: %s\n", err)
+	}
+}
+
+func getTerminalWidth() int {
+	termSize, err := t3hterm.GetSizeAndPosition()
+	if err != nil {
+		return 80
+	} else {
+		return termSize.Width
 	}
 }
 
@@ -110,7 +126,6 @@ func watch() {
 		select {
 		case event := <-watcher.Events:
 			if event.Op&fsnotify.Write == fsnotify.Write {
-				fmt.Printf(event.Name)
 				change <- event.Name
 			}
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
